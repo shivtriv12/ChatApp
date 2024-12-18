@@ -52,6 +52,8 @@ const db_1 = require("./db");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const cors_1 = __importDefault(require("cors"));
+const http_1 = require("http");
+const ws_1 = require("ws");
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
@@ -135,6 +137,68 @@ app.post("/api/v1/login", (req, res) => __awaiter(void 0, void 0, void 0, functi
         }
     }
 }));
-app.listen(3000, () => {
-    console.log("Listening");
+const server = (0, http_1.createServer)(app);
+const wss = new ws_1.WebSocketServer({ server });
+const rooms = {};
+wss.on("connection", (ws, req) => {
+    const token = req.headers["authorization"];
+    if (!token) {
+        ws.close(1008, "Unauthorized");
+        return;
+    }
+    try {
+        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        if (decoded) {
+            ws.userId = decoded.id;
+        }
+    }
+    catch (err) {
+        ws.close(1008, "Unauthorized");
+        return;
+    }
+    console.log("connected");
+    ws.on("message", (data) => __awaiter(void 0, void 0, void 0, function* () {
+        const message = JSON.parse(data.toString());
+        try {
+            if (message.type === "join_room") {
+                for (const r in rooms) {
+                    rooms[r].delete(ws);
+                }
+                const room = message.room;
+                if (!rooms[room]) {
+                    rooms[room] = new Set();
+                }
+                rooms[room].add(ws);
+                ws.send(JSON.stringify({ type: "join_success", room }));
+            }
+            else if (message.type === "send_message") {
+                const room = message.room;
+                const content = message.content;
+                if (rooms[room]) {
+                    rooms[room].forEach((client) => __awaiter(void 0, void 0, void 0, function* () {
+                        if (client !== ws && client.readyState === ws_1.WebSocket.OPEN) {
+                            client.send(JSON.stringify({ type: "message", content }));
+                            yield db_1.messageModel.create({
+                                senderId: ws['userId'],
+                                roomId: room,
+                                content: content
+                            });
+                        }
+                    }));
+                }
+            }
+        }
+        catch (error) {
+            ws.close(4003, "Invalid message format");
+        }
+    }));
+    ws.on("close", () => {
+        for (const room in rooms) {
+            rooms[room].delete(ws);
+        }
+        console.log("disconnected");
+    });
+});
+server.listen(3000, () => {
+    console.log("Server is running on port 3000");
 });

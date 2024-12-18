@@ -13,3 +13,11 @@ const userSchema = new Schema({
     password: String
 });
 export const userModel = model("User",userSchema);
+
+const messageSchema = new Schema({
+    senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    roomId: { type: String, required: true },
+    content: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now }
+});
+export const messageModel= mongoose.model('Message', messageSchema);

@@ -1,10 +1,12 @@
 import express from "express";
 import z, { ZodError } from "zod";
 import bcrypt from "bcrypt";
-import { userModel } from "./db";
-import jwt from "jsonwebtoken";
+import { userModel,messageModel } from "./db";
+import jwt,{JwtPayload} from "jsonwebtoken";
 import dotenv from "dotenv";
 import cors from "cors";
+import { createServer } from "http";
+import {WebSocketServer,WebSocket} from "ws";
 
 const app = express();
 app.use(cors());
@@ -23,6 +25,10 @@ interface User{
     username:string;
     password:string;
 }
+interface CustomWebSocket extends WebSocket {
+    userId?: string;
+}
+
 
 app.post("/api/v1/register",async(req,res)=>{
     try{
@@ -94,6 +100,71 @@ app.post("/api/v1/login", async (req, res) => {
     }
 });
 
-app.listen(3000,()=>{
-    console.log("Listening");
+const server = createServer(app);
+const wss = new WebSocketServer({ server });
+
+const rooms: { [roomId: string]: Set<WebSocket> } = {};
+
+wss.on("connection", (ws:CustomWebSocket,req) => {
+    const token = req.headers["authorization"];
+    if (!token) {
+        ws.close(1008, "Unauthorized");
+        return;
+    }
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded) {
+            (ws as any).userId = (decoded as JwtPayload).id;
+        }
+    } catch (err) {
+        ws.close(1008, "Unauthorized");
+        return;
+    }
+    console.log("connected");
+    ws.on("message", async (data) => {
+        const message = JSON.parse(data.toString());
+        try {
+            if (message.type === "join_room") {
+                for (const r in rooms) {
+                    rooms[r].delete(ws);
+                }
+                const room = message.room;
+                if (!rooms[room]) {
+                    rooms[room] = new Set();
+                }
+                rooms[room].add(ws);
+                ws.send(JSON.stringify({ type: "join_success", room }));
+            } else if (message.type === "send_message") {
+                const room = message.room;
+                const content = message.content;
+                if (rooms[room]) {
+                    rooms[room].forEach(async (client) => {
+                        if (client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({ type: "message", content }));
+                            await messageModel.create({
+                                senderId: ws['userId'],
+                                roomId: room,
+                                content: content
+                            });
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            ws.close(4003, "Invalid message format");
+        }
+        
+    });
+
+    ws.on("close", () => {
+        for (const room in rooms) {
+            rooms[room].delete(ws);
+        }
+        console.log("disconnected");
+    });
+});
+
+server.listen(3000, () => {
+    console.log("Server is running on port 3000");
 });

@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.userModel = void 0;
+exports.messageModel = exports.userModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
@@ -50,3 +50,10 @@ const userSchema = new mongoose_1.Schema({
     password: String
 });
 exports.userModel = (0, mongoose_1.model)("User", userSchema);
+const messageSchema = new mongoose_1.Schema({
+    senderId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'User', required: true },
+    roomId: { type: String, required: true },
+    content: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now }
+});
+exports.messageModel = mongoose_1.default.model('Message', messageSchema);
