@@ -54,6 +54,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const cors_1 = __importDefault(require("cors"));
 const http_1 = require("http");
 const ws_1 = require("ws");
+const middleware_1 = require("./middleware");
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
@@ -75,7 +76,7 @@ app.post("/api/v1/register", (req, res) => __awaiter(void 0, void 0, void 0, fun
             password: hashedPassword
         });
         res.status(201).json({
-            message: "User Signed In"
+            message: "User Registered Successfully"
         });
     }
     catch (error) {
@@ -105,7 +106,8 @@ app.post("/api/v1/login", (req, res) => __awaiter(void 0, void 0, void 0, functi
             const isPasswordValid = yield bcrypt_1.default.compare(password, user.password);
             if (isPasswordValid) {
                 const token = jsonwebtoken_1.default.sign({
-                    id: user._id
+                    id: user._id,
+                    username: user.username,
                 }, JWT_SECRET);
                 res.json({
                     token
@@ -137,6 +139,91 @@ app.post("/api/v1/login", (req, res) => __awaiter(void 0, void 0, void 0, functi
         }
     }
 }));
+app.post("/api/v1/rooms", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { name } = req.body;
+    const header = req.headers["authorization"];
+    try {
+        if (!header) {
+            res.status(403).json({
+                message: "You are not logged in"
+            });
+            return;
+        }
+        const token = header.split(" ")[1];
+        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        const createdBy = decoded.id;
+        if (!name) {
+            res.status(400).json({ message: "Room name is required" });
+            return;
+        }
+        const room = yield db_1.roomModel.create({
+            name,
+            createdBy,
+        });
+        res.status(201).json({ message: "Room created successfully", room });
+        return;
+    }
+    catch (error) {
+        if (error instanceof jsonwebtoken_1.default.JsonWebTokenError) {
+            res.status(403).json({
+                message: "You are not logged in"
+            });
+            return;
+        }
+        console.error("Error creating room:", error);
+        res.status(500).json({ message: "Internal server error" });
+        return;
+    }
+}));
+app.get("/api/v1/rooms", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const rooms = yield db_1.roomModel.find({}, "name").sort({ createdAt: -1 });
+        res.json(rooms.map((room) => room.name));
+    }
+    catch (error) {
+        console.error("Error fetching rooms:", error);
+        res.status(500).send("Internal server error");
+    }
+}));
+function isPopulatedMessage(message) {
+    return message.senderId && typeof message.senderId.username === 'string';
+}
+app.get("/api/v1/rooms/:roomId/messages", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { roomId } = req.params;
+    try {
+        const room = yield db_1.roomModel.findById(roomId);
+        if (!room) {
+            res.status(404).send("Room not found");
+            return;
+        }
+        const messages = yield db_1.messageModel
+            .find({ roomId: room._id })
+            .populate("senderId", "username")
+            .sort({ timestamp: 1 });
+        const responseMessages = messages.map(message => {
+            if (isPopulatedMessage(message)) {
+                return {
+                    sender: message.senderId.username,
+                    content: message.content,
+                    timestamp: message.timestamp,
+                };
+            }
+            else {
+                return {
+                    sender: "Unknown",
+                    content: message.content,
+                    timestamp: message.timestamp,
+                };
+            }
+        });
+        res.json(responseMessages);
+        return;
+    }
+    catch (error) {
+        console.error("Error fetching messages:", error);
+        res.status(500).send("Internal server error");
+    }
+}));
 const server = (0, http_1.createServer)(app);
 const wss = new ws_1.WebSocketServer({ server });
 const rooms = {};
@@ -149,7 +236,7 @@ wss.on("connection", (ws, req) => {
     try {
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
         if (decoded) {
-            ws.userId = decoded.id;
+            ws.userId = decoded.id; // Attach userId to the socket
         }
     }
     catch (err) {
@@ -161,31 +248,44 @@ wss.on("connection", (ws, req) => {
         const message = JSON.parse(data.toString());
         try {
             if (message.type === "join_room") {
-                for (const r in rooms) {
-                    rooms[r].delete(ws);
+                // Remove the user from any existing rooms
+                if (ws.currentRoom) {
+                    rooms[ws.currentRoom].delete(ws);
                 }
                 const room = message.room;
                 if (!rooms[room]) {
                     rooms[room] = new Set();
                 }
                 rooms[room].add(ws);
+                ws.currentRoom = room; // Track the current room the user is in
                 ws.send(JSON.stringify({ type: "join_success", room }));
             }
             else if (message.type === "send_message") {
-                const room = message.room;
+                const room = ws.currentRoom;
                 const content = message.content;
-                if (rooms[room]) {
-                    rooms[room].forEach((client) => __awaiter(void 0, void 0, void 0, function* () {
-                        if (client !== ws && client.readyState === ws_1.WebSocket.OPEN) {
-                            client.send(JSON.stringify({ type: "message", content }));
-                            yield db_1.messageModel.create({
-                                senderId: ws['userId'],
-                                roomId: room,
-                                content: content
-                            });
+                if (room && rooms[room]) {
+                    const newMessage = yield db_1.messageModel.create({
+                        senderId: ws.userId,
+                        roomId: room,
+                        content: content
+                    });
+                    rooms[room].forEach((client) => {
+                        if (client.readyState === ws_1.WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                type: "message",
+                                sender: newMessage.senderId,
+                                content: newMessage.content,
+                                timestamp: newMessage.timestamp
+                            }));
                         }
-                    }));
+                    });
                 }
+                else {
+                    ws.send(JSON.stringify({ type: "error", message: "You must join a room first" }));
+                }
+            }
+            else {
+                ws.close(4001, "Invalid message type");
             }
         }
         catch (error) {
@@ -193,8 +293,8 @@ wss.on("connection", (ws, req) => {
         }
     }));
     ws.on("close", () => {
-        for (const room in rooms) {
-            rooms[room].delete(ws);
+        if (ws.currentRoom) {
+            rooms[ws.currentRoom].delete(ws);
         }
         console.log("disconnected");
     });

@@ -13,21 +13,23 @@ if (!JWT_SECRET) {
 }
 const userMiddleware = (req, res, next) => {
     const header = req.headers["authorization"];
-    const decoded = jsonwebtoken_1.default.verify(header, JWT_SECRET);
-    if (decoded) {
-        if (typeof decoded === "string") {
-            res.status(403).json({
-                message: "You are not logged in"
-            });
-            return;
-        }
-        req.userId = decoded.id;
-        next();
-    }
-    else {
+    if (!header) {
         res.status(403).json({
             message: "You are not logged in"
         });
+        return;
+    }
+    try {
+        const token = header.split(" ")[1];
+        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        req.userId = decoded.id;
+        next();
+    }
+    catch (error) {
+        res.status(403).json({
+            message: "You are not logged in"
+        });
+        return;
     }
 };
 exports.userMiddleware = userMiddleware;

@@ -9,15 +9,22 @@ if (!DB_URL) {
 mongoose.connect(DB_URL);
 
 const userSchema = new Schema({
-    username:{type:String,unique:true},
-    password: String
+    username:{type:String,unique:true,required:true},
+    password: {type:String,required:true}
 });
 export const userModel = model("User",userSchema);
 
 const messageSchema = new Schema({
     senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    roomId: { type: String, required: true },
+    roomId: { type: mongoose.Schema.Types.ObjectId, ref: "Room", required: true },
     content: { type: String, required: true },
     timestamp: { type: Date, default: Date.now }
 });
 export const messageModel= mongoose.model('Message', messageSchema);
+
+const roomSchema = new Schema({
+    name: { type: String, unique: true, required: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User",required:true },
+    createdAt: { type: Date, default: Date.now },
+});
+export const roomModel = model("Room", roomSchema);
