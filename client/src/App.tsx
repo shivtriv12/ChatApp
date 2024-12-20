@@ -1,3 +1,4 @@
+import { RoomPage } from "./pages/room";
 import { HomePage } from "./pages/home";
 import { Login } from "./pages/login";
 import Register from "./pages/register";
@@ -9,6 +10,7 @@ function App() {
             <Route path="/" element={<HomePage/>}/>
             <Route path="/register" element={<Register/>}/>
             <Route path="/login" element={<Login/>}/>
+            <Route path="/rooms" element={<RoomPage/>}/>
         </Routes>
     </BrowserRouter>
 }

@@ -55,8 +55,13 @@ const cors_1 = __importDefault(require("cors"));
 const http_1 = require("http");
 const ws_1 = require("ws");
 const middleware_1 = require("./middleware");
+const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const app = (0, express_1.default)();
-app.use((0, cors_1.default)());
+app.use((0, cors_1.default)({
+    origin: "http://localhost:5173",
+    credentials: true
+}));
+app.use((0, cookie_parser_1.default)());
 app.use(express_1.default.json());
 dotenv_1.default.config();
 const JWT_SECRET = process.env.JWT_SECRET;

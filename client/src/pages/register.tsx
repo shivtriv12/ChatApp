@@ -1,17 +1,15 @@
 import { useRef } from "react";
-import { Button } from "../components/button";
-import { Input } from "../components/input";
 import axios from "axios";
-import {useNavigate} from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const BACKEND_URL = "http://localhost:3000";
 
-export default function Register(){
-    const usernameRef = useRef<HTMLInputElement>();
-    const passwordRef = useRef<HTMLInputElement>();
+export default function Register() {
+    const usernameRef = useRef<HTMLInputElement>(null);
+    const passwordRef = useRef<HTMLInputElement>(null);
     const navigate = useNavigate();
 
-    async function register(){
+    async function register() {
         const username = usernameRef.current?.value;
         const password = passwordRef.current?.value;
         if (!username || !password) {
@@ -23,27 +21,49 @@ export default function Register(){
                 username,
                 password,
             });
-            alert("You have registered!");
+            alert("You have registered successfully!");
             navigate("/login");
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                if (error.response?.status === 409) {
-                    alert("User already exists. Please sign in or use a different username.");
-                } else {
-                    alert("An error occurred. Please try again later.");
-                }
-            } else {
-                alert("An unexpected error occurred.");
-            }
+            alert("Registration failed. Please try again.");
         }
     }
-    return <div className="h-screen w-screen bg-gray-200 flex justify-center items-center">
-        <div className="bg-white rounded-xl border min-w-48 p-4">
-                <Input reference={usernameRef} placeholder="Username"/>
-                <Input reference={passwordRef} placeholder="Password"/>
-            <div className="flex justify-center my-2"> 
-                <Button onClick={register} loading={false} fullWidth={true} variant="primary" text="Register"/>
+
+    return (
+        <div className="h-screen w-screen bg-gradient-to-r from-gray-800 to-gray-900 flex flex-col justify-center items-center">
+            <div className="w-full max-w-md p-8 bg-gray-700 rounded-lg shadow-lg">
+                <h1 className="text-4xl font-bold text-white mb-8 text-center">Register</h1>
+                <div className="mb-4">
+                    <input
+                        ref={usernameRef}
+                        type="text"
+                        placeholder="Username"
+                        className="w-full p-2 rounded-md bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
+                <div className="mb-6">
+                    <input
+                        ref={passwordRef}
+                        type="password"
+                        placeholder="Password"
+                        className="w-full p-2 rounded-md bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
+                <button
+                    onClick={register}
+                    className="w-full bg-blue-600 text-white px-4 py-2 rounded-md shadow-md hover:bg-blue-700 transition transform hover:scale-105"
+                >
+                    Register
+                </button>
+                <p className="text-gray-300 mt-4 text-center">
+                    Already have an account?{" "}
+                    <span
+                        onClick={() => navigate("/login")}
+                        className="text-blue-500 cursor-pointer hover:underline"
+                    >
+                        Login
+                    </span>
+                </p>
             </div>
         </div>
-    </div>
+    );
 }

@@ -12,15 +12,14 @@ if (!JWT_SECRET) {
     throw new Error("JWT_SECRET is not defined in the environment variables");
 }
 const userMiddleware = (req, res, next) => {
-    const header = req.headers["authorization"];
-    if (!header) {
+    const token = req.cookies.token;
+    if (!token) {
         res.status(403).json({
             message: "You are not logged in"
         });
         return;
     }
     try {
-        const token = header.split(" ")[1];
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
         req.userId = decoded.id;
         next();
