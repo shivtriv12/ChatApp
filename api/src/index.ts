@@ -75,11 +75,17 @@ app.post("/api/v1/login", async (req, res) => {
                 const token = jwt.sign({
                     id: user._id,
                     username: user.username,
-                }, JWT_SECRET)
+                }, JWT_SECRET, { expiresIn: '12h' })
         
-                res.json({
-                    token
+                res.cookie("token", token, {
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === "production",
+                    sameSite: "strict",
+                    maxAge: 12 * 60 * 60 * 1000
                 });
+
+                res.json({ message: "Login successful" });
+                return;
             }
             else {
                 res.status(403).json({
