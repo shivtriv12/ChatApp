@@ -149,23 +149,14 @@ app.post("/api/v1/login", (req, res) => __awaiter(void 0, void 0, void 0, functi
         }
     }
 }));
-app.post("/api/v1/rooms", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.post("/api/v1/rooms", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { name } = req.body;
-    const header = req.headers["authorization"];
+    const createdBy = req.userId;
+    if (!name) {
+        res.status(400).json({ message: "Room name is required" });
+        return;
+    }
     try {
-        if (!header) {
-            res.status(403).json({
-                message: "You are not logged in"
-            });
-            return;
-        }
-        const token = header.split(" ")[1];
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        const createdBy = decoded.id;
-        if (!name) {
-            res.status(400).json({ message: "Room name is required" });
-            return;
-        }
         const room = yield db_1.roomModel.create({
             name,
             createdBy,
@@ -174,12 +165,6 @@ app.post("/api/v1/rooms", (req, res) => __awaiter(void 0, void 0, void 0, functi
         return;
     }
     catch (error) {
-        if (error instanceof jsonwebtoken_1.default.JsonWebTokenError) {
-            res.status(403).json({
-                message: "You are not logged in"
-            });
-            return;
-        }
         console.error("Error creating room:", error);
         res.status(500).json({ message: "Internal server error" });
         return;
@@ -187,8 +172,8 @@ app.post("/api/v1/rooms", (req, res) => __awaiter(void 0, void 0, void 0, functi
 }));
 app.get("/api/v1/rooms", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const rooms = yield db_1.roomModel.find({}, "name").sort({ createdAt: -1 });
-        res.json(rooms.map((room) => room.name));
+        const rooms = yield db_1.roomModel.find({}, "name createdBy").populate("createdBy", "username").sort({ createdAt: -1 });
+        res.json({ rooms, userId: req.userId });
     }
     catch (error) {
         console.error("Error fetching rooms:", error);
@@ -232,6 +217,24 @@ app.get("/api/v1/rooms/:roomId/messages", middleware_1.userMiddleware, (req, res
     catch (error) {
         console.error("Error fetching messages:", error);
         res.status(500).send("Internal server error");
+    }
+}));
+app.delete("/api/v1/rooms/:roomId", middleware_1.userMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { roomId } = req.params;
+    try {
+        // Delete all messages related to the room
+        yield db_1.messageModel.deleteMany({ roomId });
+        // Delete the room
+        const room = yield db_1.roomModel.findByIdAndDelete(roomId);
+        if (!room) {
+            res.status(404).json({ message: "Room not found" });
+            return;
+        }
+        res.status(200).json({ message: "Room and related messages deleted successfully" });
+    }
+    catch (error) {
+        console.error("Error deleting room:", error);
+        res.status(500).json({ message: "Internal server error" });
     }
 }));
 const server = (0, http_1.createServer)(app);

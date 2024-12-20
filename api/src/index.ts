@@ -119,26 +119,16 @@ app.post("/api/v1/login", async (req, res) => {
 });
 
 
-app.post("/api/v1/rooms", async (req, res) => {
+app.post("/api/v1/rooms", userMiddleware, async (req, res) => {
     const { name } = req.body;
-    const header = req.headers["authorization"];
+    const createdBy = req.userId;
+
+    if (!name) {
+        res.status(400).json({ message: "Room name is required" });
+        return;
+    }
 
     try {
-        if (!header) {
-            res.status(403).json({
-                message: "You are not logged in"
-            });
-            return;
-        }    
-        const token = header.split(" ")[1];
-        const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-        const createdBy = decoded.id;
-
-        if (!name) {
-            res.status(400).json({ message: "Room name is required" });
-            return;
-        }
-
         const room = await roomModel.create({
             name,
             createdBy,
@@ -147,22 +137,16 @@ app.post("/api/v1/rooms", async (req, res) => {
         res.status(201).json({ message: "Room created successfully", room });
         return;
     } catch (error) {
-        if (error instanceof jwt.JsonWebTokenError) {
-            res.status(403).json({
-                message: "You are not logged in"
-            });
-            return;
-        }
         console.error("Error creating room:", error);
         res.status(500).json({ message: "Internal server error" });
         return;
     }
 });
 
-app.get("/api/v1/rooms",userMiddleware, async (req, res) => {
+app.get("/api/v1/rooms", userMiddleware, async (req, res) => {
     try {
-        const rooms = await roomModel.find({}, "name").sort({ createdAt: -1 });
-        res.json(rooms.map((room) => room.name));
+        const rooms = await roomModel.find({}, "name createdBy").populate("createdBy", "username").sort({ createdAt: -1 });
+        res.json({ rooms, userId: req.userId });
     } catch (error) {
         console.error("Error fetching rooms:", error);
         res.status(500).send("Internal server error");
@@ -208,6 +192,28 @@ app.get("/api/v1/rooms/:roomId/messages",userMiddleware, async (req: Request, re
     } catch (error) {
         console.error("Error fetching messages:", error);
         res.status(500).send("Internal server error");
+    }
+});
+
+app.delete("/api/v1/rooms/:roomId", userMiddleware, async (req, res) => {
+    const { roomId } = req.params;
+
+    try {
+        // Delete all messages related to the room
+        await messageModel.deleteMany({ roomId });
+
+        // Delete the room
+        const room = await roomModel.findByIdAndDelete(roomId);
+
+        if (!room) {
+            res.status(404).json({ message: "Room not found" });
+            return;
+        }
+
+        res.status(200).json({ message: "Room and related messages deleted successfully" });
+    } catch (error) {
+        console.error("Error deleting room:", error);
+        res.status(500).json({ message: "Internal server error" });
     }
 });
 
