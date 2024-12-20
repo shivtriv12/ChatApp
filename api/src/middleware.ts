@@ -15,15 +15,14 @@ declare module "express-serve-static-core" {
 }
 
 export const userMiddleware = (req: Request, res: Response, next: NextFunction) => {
-    const header = req.headers["authorization"];
-    if (!header) {
+    const token = req.cookies.token;
+    if (!token) {
         res.status(403).json({
             message: "You are not logged in"
         });
         return;
     }
     try {
-        const token = header.split(" ")[1];
         const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
         req.userId = decoded.id;
         next();
@@ -33,4 +32,4 @@ export const userMiddleware = (req: Request, res: Response, next: NextFunction) 
         });
         return;
     }
-};
+}
