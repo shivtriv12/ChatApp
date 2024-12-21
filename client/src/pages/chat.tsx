@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from 'axios'; // Ensure axios is installed and imported
+//import axios from 'axios'; // Ensure axios is installed and imported
 
 const BACKEND_WS_URL = "ws://localhost:3000"; // Adjust if your WS server is on a different port
 const BACKEND_API_URL = "http://localhost:3000/api/v1";
