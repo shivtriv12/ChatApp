@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { TrashIcon } from "../icons/Trash"; // Import the TrashIcon component
+import { useNavigate } from "react-router-dom";
 
 const BACKEND_URL = "http://localhost:3000";
 
@@ -17,6 +18,7 @@ export function RoomPage() {
     const [rooms, setRooms] = useState<Room[]>([]);
     const [newRoomName, setNewRoomName] = useState("");
     const [userId, setUserId] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         async function fetchRooms() {
@@ -60,6 +62,10 @@ export function RoomPage() {
         }
     }
 
+    const joinRoom = (roomId: string) => {
+        navigate(`/chat/${roomId}`);
+    };
+
     return (
         <div className="h-screen w-screen bg-gradient-to-r from-gray-800 to-gray-900 flex flex-col items-center p-8">
             <h1 className="text-4xl font-bold text-white mb-8">Rooms</h1>
@@ -82,7 +88,10 @@ export function RoomPage() {
                                         `(Created by: ${room.createdBy.username})`
                                     )}
                                 </span>
-                                <button className="bg-green-600 text-white px-3 py-1 rounded-md shadow-md hover:bg-green-700 transition transform hover:scale-105">
+                                <button
+                                    className="bg-green-600 text-white px-3 py-1 rounded-md shadow-md hover:bg-green-700 transition transform hover:scale-105"
+                                    onClick={() => joinRoom(room._id)}
+                                >
                                     Join Room
                                 </button>
                             </li>

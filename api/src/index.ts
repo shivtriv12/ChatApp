@@ -10,7 +10,7 @@ import {WebSocketServer,WebSocket} from "ws";
 import { userMiddleware } from "./middleware";
 import { Document} from "mongoose";
 import cookieParser from "cookie-parser";
-
+import { timeStamp } from "console";
 
 const app = express();
 app.use(cors({
@@ -34,10 +34,6 @@ interface PopulatedMessage extends Document {
     };
     content: string;
     timestamp: Date;
-}
-interface CustomWebSocket extends WebSocket {
-    userId?: string;
-    currentRoom?: string;
 }
 
 app.post("/api/v1/register",async(req,res)=>{
@@ -85,12 +81,12 @@ app.post("/api/v1/login", async (req, res) => {
         
                 res.cookie("token", token, {
                     httpOnly: true,
-                    secure: process.env.NODE_ENV === "production",
-                    sameSite: "strict",
+                    sameSite:process.env.NODE_ENV==="development"?"lax":"none",
+                    secure:process.env.NODE_ENV==="development"?false:true,
                     maxAge: 12 * 60 * 60 * 1000
                 });
 
-                res.json({ message: "Login successful" });
+                res.json({ message: "Login successful"});
                 return;
             }
             else {
@@ -219,80 +215,63 @@ app.delete("/api/v1/rooms/:roomId", userMiddleware, async (req, res) => {
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
-const rooms: { [roomId: string]: Set<WebSocket> } = {};
 
-wss.on("connection", (ws: CustomWebSocket, req) => {
-    const token = req.headers["authorization"];
-    if (!token) {
-        ws.close(1008, "Unauthorized");
+const rooms: { [key: string]: WebSocket[] } = {};
+
+wss.on("connection",async (socket,req)=>{
+    let cookies = req.headers.cookie;
+
+    if(cookies?.includes("token=")){
+        cookies = cookies.replace("token=","");
+    }
+    
+    if(!cookies){
+        socket.send(JSON.stringify({message:"You are not logged in"}));
+        socket.close();
         return;
     }
+    const urlParams = new URLSearchParams(req.url?.split("?")[1]);
+    const roomId = urlParams.get("roomId");
 
+    if (!roomId) {
+        socket.send(JSON.stringify({ message: "No roomId provided" }));
+        socket.close();
+        return;
+    }
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        if (decoded) {
-            ws.userId = (decoded as JwtPayload).id; // Attach userId to the socket
+        const { id, username } = jwt.verify(cookies, JWT_SECRET) as JwtPayload;  
+        await roomModel.findById(roomId);
+        if (!rooms[roomId]) {
+            rooms[roomId] = [];
         }
-    } catch (err) {
-        ws.close(1008, "Unauthorized");
+        rooms[roomId].push(socket);
+        console.log(rooms);
+        socket.on("message", (data) => {
+            const parsedData = JSON.parse(data.toString());
+            const message =  parsedData.message;;
+            const payload = JSON.stringify({ sender:username, content:message,timestamp:new Date().toLocaleDateString()});
+            const socketsInRoom = rooms[roomId] || [];
+            socketsInRoom.forEach((ws, index) => {
+                if (ws.readyState !== WebSocket.OPEN) {
+                    // Remove the offline WebSocket from the array
+                    socketsInRoom.splice(index, 1);
+                    console.log(`Removed inactive WebSocket at index ${index}`);
+                }
+            });
+            
+            // After removing inactive WebSockets, send the payload to active ones
+            socketsInRoom.forEach((ws) => {
+                if ( ws.readyState === WebSocket.OPEN) {
+                    ws.send(payload);
+                    console.log(`Sent payload to WebSocket: ${payload}`);
+                }
+            });
+        });
+    } catch (error) {
+        socket.send(JSON.stringify({message:"You are not logged in or invalid roomId"}));
+        socket.close();
         return;
     }
-
-    console.log("connected");
-
-    ws.on("message", async (data) => {
-        const message = JSON.parse(data.toString());
-        try {
-            if (message.type === "join_room") {
-                // Remove the user from any existing rooms
-                if (ws.currentRoom) {
-                    rooms[ws.currentRoom].delete(ws);
-                }
-
-                const room = message.room;
-                if (!rooms[room]) {
-                    rooms[room] = new Set();
-                }
-                rooms[room].add(ws);
-                ws.currentRoom = room; // Track the current room the user is in
-                ws.send(JSON.stringify({ type: "join_success", room }));
-            } else if (message.type === "send_message") {
-                const room = ws.currentRoom;
-                const content = message.content;
-                if (room && rooms[room]) {
-                    const newMessage = await messageModel.create({
-                        senderId: ws.userId,
-                        roomId: room,
-                        content: content
-                    });
-
-                    rooms[room].forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(JSON.stringify({
-                                type: "message",
-                                sender: newMessage.senderId,
-                                content: newMessage.content,
-                                timestamp: newMessage.timestamp
-                            }));
-                        }
-                    });
-                } else {
-                    ws.send(JSON.stringify({ type: "error", message: "You must join a room first" }));
-                }
-            } else {
-                ws.close(4001, "Invalid message type");
-            }
-        } catch (error) {
-            ws.close(4003, "Invalid message format");
-        }
-    });
-
-    ws.on("close", () => {
-        if (ws.currentRoom) {
-            rooms[ws.currentRoom].delete(ws);
-        }
-        console.log("disconnected");
-    });
 });
 
 server.listen(3000, () => {

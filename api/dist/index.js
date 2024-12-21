@@ -116,8 +116,8 @@ app.post("/api/v1/login", (req, res) => __awaiter(void 0, void 0, void 0, functi
                 }, JWT_SECRET, { expiresIn: '12h' });
                 res.cookie("token", token, {
                     httpOnly: true,
-                    secure: process.env.NODE_ENV === "production",
-                    sameSite: "strict",
+                    sameSite: process.env.NODE_ENV === "development" ? "lax" : "none",
+                    secure: process.env.NODE_ENV === "development" ? false : true,
                     maxAge: 12 * 60 * 60 * 1000
                 });
                 res.json({ message: "Login successful" });
@@ -240,78 +240,60 @@ app.delete("/api/v1/rooms/:roomId", middleware_1.userMiddleware, (req, res) => _
 const server = (0, http_1.createServer)(app);
 const wss = new ws_1.WebSocketServer({ server });
 const rooms = {};
-wss.on("connection", (ws, req) => {
-    const token = req.headers["authorization"];
-    if (!token) {
-        ws.close(1008, "Unauthorized");
+wss.on("connection", (socket, req) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    let cookies = req.headers.cookie;
+    if (cookies === null || cookies === void 0 ? void 0 : cookies.includes("token=")) {
+        cookies = cookies.replace("token=", "");
+    }
+    if (!cookies) {
+        socket.send(JSON.stringify({ message: "You are not logged in" }));
+        socket.close();
+        return;
+    }
+    const urlParams = new URLSearchParams((_a = req.url) === null || _a === void 0 ? void 0 : _a.split("?")[1]);
+    const roomId = urlParams.get("roomId");
+    if (!roomId) {
+        socket.send(JSON.stringify({ message: "No roomId provided" }));
+        socket.close();
         return;
     }
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        if (decoded) {
-            ws.userId = decoded.id; // Attach userId to the socket
+        const { id, username } = jsonwebtoken_1.default.verify(cookies, JWT_SECRET);
+        yield db_1.roomModel.findById(roomId);
+        if (!rooms[roomId]) {
+            rooms[roomId] = [];
         }
+        rooms[roomId].push(socket);
+        console.log(rooms);
+        socket.on("message", (data) => {
+            const parsedData = JSON.parse(data.toString());
+            const message = parsedData.message;
+            ;
+            const payload = JSON.stringify({ sender: username, content: message, timestamp: new Date().toLocaleDateString() });
+            const socketsInRoom = rooms[roomId] || [];
+            socketsInRoom.forEach((ws, index) => {
+                if (ws.readyState !== ws_1.WebSocket.OPEN) {
+                    // Remove the offline WebSocket from the array
+                    socketsInRoom.splice(index, 1);
+                    console.log(`Removed inactive WebSocket at index ${index}`);
+                }
+            });
+            // After removing inactive WebSockets, send the payload to active ones
+            socketsInRoom.forEach((ws) => {
+                if (ws.readyState === ws_1.WebSocket.OPEN) {
+                    ws.send(payload);
+                    console.log(`Sent payload to WebSocket: ${payload}`);
+                }
+            });
+        });
     }
-    catch (err) {
-        ws.close(1008, "Unauthorized");
+    catch (error) {
+        socket.send(JSON.stringify({ message: "You are not logged in or invalid roomId" }));
+        socket.close();
         return;
     }
-    console.log("connected");
-    ws.on("message", (data) => __awaiter(void 0, void 0, void 0, function* () {
-        const message = JSON.parse(data.toString());
-        try {
-            if (message.type === "join_room") {
-                // Remove the user from any existing rooms
-                if (ws.currentRoom) {
-                    rooms[ws.currentRoom].delete(ws);
-                }
-                const room = message.room;
-                if (!rooms[room]) {
-                    rooms[room] = new Set();
-                }
-                rooms[room].add(ws);
-                ws.currentRoom = room; // Track the current room the user is in
-                ws.send(JSON.stringify({ type: "join_success", room }));
-            }
-            else if (message.type === "send_message") {
-                const room = ws.currentRoom;
-                const content = message.content;
-                if (room && rooms[room]) {
-                    const newMessage = yield db_1.messageModel.create({
-                        senderId: ws.userId,
-                        roomId: room,
-                        content: content
-                    });
-                    rooms[room].forEach((client) => {
-                        if (client.readyState === ws_1.WebSocket.OPEN) {
-                            client.send(JSON.stringify({
-                                type: "message",
-                                sender: newMessage.senderId,
-                                content: newMessage.content,
-                                timestamp: newMessage.timestamp
-                            }));
-                        }
-                    });
-                }
-                else {
-                    ws.send(JSON.stringify({ type: "error", message: "You must join a room first" }));
-                }
-            }
-            else {
-                ws.close(4001, "Invalid message type");
-            }
-        }
-        catch (error) {
-            ws.close(4003, "Invalid message format");
-        }
-    }));
-    ws.on("close", () => {
-        if (ws.currentRoom) {
-            rooms[ws.currentRoom].delete(ws);
-        }
-        console.log("disconnected");
-    });
-});
+}));
 server.listen(3000, () => {
     console.log("Server is running on port 3000");
 });
