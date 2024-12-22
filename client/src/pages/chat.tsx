@@ -78,7 +78,6 @@ export function Chat() {
             console.log("WebSocket connection closed");
         };
 
-        // Clean up on component unmount
         return () => {
             wsRef.current?.close();
         };
@@ -88,7 +87,6 @@ export function Chat() {
         if (newMessage.trim() && wsRef.current?.readyState === WebSocket.OPEN) {
             const messagePayload = {
                 message: newMessage
-                // Removed sender as it's handled by the backend
             };
             wsRef.current.send(JSON.stringify(messagePayload));
             setNewMessage("");
