@@ -10,7 +10,6 @@ import {WebSocketServer,WebSocket} from "ws";
 import { userMiddleware } from "./middleware";
 import { Document} from "mongoose";
 import cookieParser from "cookie-parser";
-import { timeStamp } from "console";
 
 const app = express();
 app.use(cors({
@@ -231,7 +230,7 @@ wss.on("connection",async (socket,req)=>{
         return;
     }
     const urlParams = new URLSearchParams(req.url?.split("?")[1]);
-    const roomId = urlParams.get("roomId");
+    const roomId = urlParams.get("roomId")||"someRandomRoomId";
 
     if (!roomId) {
         socket.send(JSON.stringify({ message: "No roomId provided" }));
@@ -245,27 +244,45 @@ wss.on("connection",async (socket,req)=>{
             rooms[roomId] = [];
         }
         rooms[roomId].push(socket);
-        console.log(rooms);
-        socket.on("message", (data) => {
+        
+        function notifyAboutOnlinePeople() {
+            const activeSockets = rooms[roomId].filter(ws => ws.readyState === WebSocket.OPEN);
+            rooms[roomId] = activeSockets;
+            const totalConnections = activeSockets.length;
+            activeSockets.forEach((client) => {
+                client.send(JSON.stringify({ totalConnections }));
+            });
+        }
+        notifyAboutOnlinePeople();
+
+        socket.on("close", () => {
+            notifyAboutOnlinePeople();
+        });
+        socket.on("message", async (data) => {
             const parsedData = JSON.parse(data.toString());
             const message =  parsedData.message;;
-            const payload = JSON.stringify({ sender:username, content:message,timestamp:new Date().toLocaleDateString()});
+            const payload = JSON.stringify({ sender:username, content:message,timestamp:new Date().toISOString()});
             const socketsInRoom = rooms[roomId] || [];
             socketsInRoom.forEach((ws, index) => {
                 if (ws.readyState !== WebSocket.OPEN) {
-                    // Remove the offline WebSocket from the array
                     socketsInRoom.splice(index, 1);
-                    console.log(`Removed inactive WebSocket at index ${index}`);
                 }
             });
             
-            // After removing inactive WebSockets, send the payload to active ones
             socketsInRoom.forEach((ws) => {
                 if ( ws.readyState === WebSocket.OPEN) {
                     ws.send(payload);
-                    console.log(`Sent payload to WebSocket: ${payload}`);
                 }
             });
+            const newMessage = new messageModel({
+                senderId: id,
+                roomId: roomId,      
+                content: message,
+                timestamp: new Date(),
+            });
+    
+            await newMessage.save();
+            console.log("Message saved to database:", newMessage);
         });
     } catch (error) {
         socket.send(JSON.stringify({message:"You are not logged in or invalid roomId"}));

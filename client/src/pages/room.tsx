@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { TrashIcon } from "../icons/Trash"; // Import the TrashIcon component
+import { TrashIcon } from "../icons/Trash";
 import { useNavigate } from "react-router-dom";
 
 const BACKEND_URL = "http://localhost:3000";

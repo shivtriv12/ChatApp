@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-//import axios from 'axios'; // Ensure axios is installed and imported
+import { LeaveIcon } from "../icons/Leave";
 
-const BACKEND_WS_URL = "ws://localhost:3000"; // Adjust if your WS server is on a different port
+const BACKEND_WS_URL = "ws://localhost:3000";
 const BACKEND_API_URL = "http://localhost:3000/api/v1";
 
 interface Message {
@@ -18,7 +18,7 @@ export function Chat() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState("");
     const wsRef = useRef<WebSocket | null>(null);
-
+    const [totalConnections, setTotalConnections] = useState(0);
     useEffect(() => {
         if (!roomId) {
             console.error("No roomId provided");
@@ -29,7 +29,7 @@ export function Chat() {
         const fetchMessages = async () => {
             try {
                 const response = await fetch(`${BACKEND_API_URL}/rooms/${roomId}/messages`, {
-                    credentials: 'include', // Ensure cookies are sent
+                    credentials: 'include',
                 });
                 if (!response.ok) {
                     throw new Error("Failed to fetch messages");
@@ -43,7 +43,6 @@ export function Chat() {
 
         fetchMessages();
 
-        // Establish WebSocket connection after fetching messages
         wsRef.current = new WebSocket(`${BACKEND_WS_URL}/?roomId=${roomId}`);
         
         wsRef.current.onopen = () => {
@@ -52,8 +51,20 @@ export function Chat() {
 
         wsRef.current.onmessage = (event) => {
             try {
-                const message: Message = JSON.parse(event.data);
-                setMessages((prev) => [...prev, message]);
+                const parsed = JSON.parse(event.data);
+
+                if (parsed.totalConnections !== undefined) {
+                    setTotalConnections(parsed.totalConnections);
+                }
+
+                if (parsed.sender && parsed.content) {
+                    const newMsg: Message = {
+                    sender: parsed.sender,
+                    content: parsed.content,
+                    timestamp: parsed.timestamp,
+                };
+                setMessages((prev) => [...prev, newMsg]);
+            }
             } catch (error) {
                 console.error("Error parsing message:", error);
             }
@@ -90,13 +101,16 @@ export function Chat() {
         <div className="h-screen w-screen bg-gradient-to-r from-gray-800 to-gray-900 flex flex-col items-center p-8">
             <h1 className="text-4xl font-bold text-white mb-8">Chat Room</h1>
             <div className="w-full max-w-4xl bg-gray-700 rounded-lg shadow-lg p-8 flex flex-col">
+                <div className="text-white mb-4 font-semibold">
+                    Total Online: {totalConnections}
+                </div>
                 <div className="flex-1 overflow-y-auto mb-4">
                     {messages.map((message, index) => (
                         <div key={index} className="text-white mb-2">
                             <strong>{message.sender}: </strong>
                             <span>{message.content}</span>
                             <span className="text-gray-400 text-sm ml-2">
-                                {new Date(message.timestamp).toLocaleTimeString()}
+                                {new Date(message.timestamp).toLocaleString()}
                             </span>
                         </div>
                     ))}
@@ -121,7 +135,15 @@ export function Chat() {
                         Send
                     </button>
                 </div>
-                {/* Removed Leave Room button */}
+                <button
+                    onClick={() => {
+                        wsRef.current?.close(1000, "User left the room");
+                        navigate("/rooms");
+                    }}
+                    className="p-2"
+                    >
+                    <LeaveIcon/>
+                </button>
             </div>
         </div>
     );

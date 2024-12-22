@@ -252,7 +252,7 @@ wss.on("connection", (socket, req) => __awaiter(void 0, void 0, void 0, function
         return;
     }
     const urlParams = new URLSearchParams((_a = req.url) === null || _a === void 0 ? void 0 : _a.split("?")[1]);
-    const roomId = urlParams.get("roomId");
+    const roomId = urlParams.get("roomId") || "someRandomRoomId";
     if (!roomId) {
         socket.send(JSON.stringify({ message: "No roomId provided" }));
         socket.close();
@@ -265,12 +265,23 @@ wss.on("connection", (socket, req) => __awaiter(void 0, void 0, void 0, function
             rooms[roomId] = [];
         }
         rooms[roomId].push(socket);
-        console.log(rooms);
-        socket.on("message", (data) => {
+        function notifyAboutOnlinePeople() {
+            const activeSockets = rooms[roomId].filter(ws => ws.readyState === ws_1.WebSocket.OPEN);
+            rooms[roomId] = activeSockets;
+            const totalConnections = activeSockets.length;
+            activeSockets.forEach((client) => {
+                client.send(JSON.stringify({ totalConnections }));
+            });
+        }
+        notifyAboutOnlinePeople();
+        socket.on("close", () => {
+            notifyAboutOnlinePeople();
+        });
+        socket.on("message", (data) => __awaiter(void 0, void 0, void 0, function* () {
             const parsedData = JSON.parse(data.toString());
             const message = parsedData.message;
             ;
-            const payload = JSON.stringify({ sender: username, content: message, timestamp: new Date().toLocaleDateString() });
+            const payload = JSON.stringify({ sender: username, content: message, timestamp: new Date().toISOString() });
             const socketsInRoom = rooms[roomId] || [];
             socketsInRoom.forEach((ws, index) => {
                 if (ws.readyState !== ws_1.WebSocket.OPEN) {
@@ -286,7 +297,15 @@ wss.on("connection", (socket, req) => __awaiter(void 0, void 0, void 0, function
                     console.log(`Sent payload to WebSocket: ${payload}`);
                 }
             });
-        });
+            const newMessage = new db_1.messageModel({
+                senderId: id, // The authenticated user ID
+                roomId: roomId, // The current room ID
+                content: message,
+                timestamp: new Date(),
+            });
+            yield newMessage.save();
+            console.log("Message saved to database:", newMessage);
+        }));
     }
     catch (error) {
         socket.send(JSON.stringify({ message: "You are not logged in or invalid roomId" }));

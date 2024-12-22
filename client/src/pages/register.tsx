@@ -45,6 +45,11 @@ export default function Register() {
                         ref={passwordRef}
                         type="password"
                         placeholder="Password"
+                        onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                                register();
+                            }
+                        }}
                         className="w-full p-2 rounded-md bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                 </div>
