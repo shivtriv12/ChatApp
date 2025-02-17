@@ -8,12 +8,6 @@ if (!JWT_SECRET) {
     throw new Error("JWT_SECRET is not defined in the environment variables");
 }
 
-declare module "express-serve-static-core" {
-    interface Request {
-        userId?: string;
-    }
-}
-
 export const userMiddleware = (req: Request, res: Response, next: NextFunction) => {
     const token = req.cookies.token;
     if (!token) {

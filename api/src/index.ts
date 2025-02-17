@@ -12,10 +12,7 @@ import { Document} from "mongoose";
 import cookieParser from "cookie-parser";
 
 const app = express();
-app.use(cors({
-    origin: "http://localhost:5173",
-    credentials: true
-}));
+app.use(cors());
 app.use(cookieParser());
 app.use(express.json());
 dotenv.config();
@@ -27,13 +24,6 @@ const signupSchema = z.object({
     username:z.string().min(3,{message:"Username must be atleast 3 characters long."}),
     password:z.string().min(8,{message:"Password must be atleast 8 characters long."})
 });
-interface PopulatedMessage extends Document {
-    senderId: {
-        username: string;
-    };
-    content: string;
-    timestamp: Date;
-}
 
 app.post("/api/v1/register",async(req,res)=>{
     try{
@@ -64,7 +54,6 @@ app.post("/api/v1/register",async(req,res)=>{
         }
     }
 });
-
 
 app.post("/api/v1/login", async (req, res) => {
     try{
@@ -113,7 +102,6 @@ app.post("/api/v1/login", async (req, res) => {
     }
 });
 
-
 app.post("/api/v1/rooms", userMiddleware, async (req, res) => {
     const { name } = req.body;
     const createdBy = req.userId;
@@ -147,6 +135,14 @@ app.get("/api/v1/rooms", userMiddleware, async (req, res) => {
         res.status(500).send("Internal server error");
     }
 });
+
+interface PopulatedMessage extends Document {
+    senderId: {
+        username: string;
+    };
+    content: string;
+    timestamp: Date;
+}
 
 function isPopulatedMessage(message: any): message is PopulatedMessage {
     return message.senderId && typeof message.senderId.username === 'string';
@@ -194,10 +190,8 @@ app.delete("/api/v1/rooms/:roomId", userMiddleware, async (req, res) => {
     const { roomId } = req.params;
 
     try {
-        // Delete all messages related to the room
         await messageModel.deleteMany({ roomId });
 
-        // Delete the room
         const room = await roomModel.findByIdAndDelete(roomId);
 
         if (!room) {
@@ -230,9 +224,9 @@ wss.on("connection",async (socket,req)=>{
         return;
     }
     const urlParams = new URLSearchParams(req.url?.split("?")[1]);
-    const roomId = urlParams.get("roomId")||"someRandomRoomId";
+    const roomId = urlParams.get("roomId")||"";
 
-    if (!roomId) {
+    if (!roomId||roomId=="") {
         socket.send(JSON.stringify({ message: "No roomId provided" }));
         socket.close();
         return;
@@ -260,7 +254,7 @@ wss.on("connection",async (socket,req)=>{
         });
         socket.on("message", async (data) => {
             const parsedData = JSON.parse(data.toString());
-            const message =  parsedData.message;;
+            const message =  parsedData.message;
             const payload = JSON.stringify({ sender:username, content:message,timestamp:new Date().toISOString()});
             const socketsInRoom = rooms[roomId] || [];
             socketsInRoom.forEach((ws, index) => {
@@ -269,11 +263,6 @@ wss.on("connection",async (socket,req)=>{
                 }
             });
             
-            socketsInRoom.forEach((ws) => {
-                if ( ws.readyState === WebSocket.OPEN) {
-                    ws.send(payload);
-                }
-            });
             const newMessage = new messageModel({
                 senderId: id,
                 roomId: roomId,      
@@ -282,6 +271,13 @@ wss.on("connection",async (socket,req)=>{
             });
     
             await newMessage.save();
+
+            socketsInRoom.forEach((ws) => {
+                if ( ws !== socket && ws.readyState === WebSocket.OPEN) {
+                    ws.send(payload);
+                }
+            });
+
             console.log("Message saved to database:", newMessage);
         });
     } catch (error) {
