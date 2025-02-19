@@ -2,7 +2,8 @@ import axios from "axios";
 import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
-const BACKEND_URL = "http://localhost:3000";
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 export function Login() {
     const usernameRef = useRef<HTMLInputElement>(null);

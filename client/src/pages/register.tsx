@@ -2,7 +2,7 @@ import { useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const BACKEND_URL = "http://localhost:3000";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 export default function Register() {
     const usernameRef = useRef<HTMLInputElement>(null);
@@ -24,7 +24,7 @@ export default function Register() {
             alert("You have registered successfully!");
             navigate("/login");
         } catch (error) {
-            alert("Registration failed. Please try again.");
+            alert("Registration failed. Please try again.Username must be atleast 3 characters long.Password must be atleast 8 characters long.");
         }
     }
 

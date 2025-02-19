@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { LeaveIcon } from "../icons/Leave";
 
-const BACKEND_WS_URL = "ws://localhost:3000";
-const BACKEND_API_URL = "http://localhost:3000/api/v1";
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_URL;
+const BACKEND_WS_URL = import.meta.env.VITE_BACKEND_WS_URL;
 
 interface Message {
     sender: string;
@@ -28,7 +28,7 @@ export function Chat() {
 
         const fetchMessages = async () => {
             try {
-                const response = await fetch(`${BACKEND_API_URL}/rooms/${roomId}/messages`, {
+                const response = await fetch(`${BACKEND_API_URL}/api/v1/rooms/${roomId}/messages`, {
                     credentials: 'include',
                 });
                 if (!response.ok) {

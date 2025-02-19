@@ -3,7 +3,8 @@ import axios from "axios";
 import { TrashIcon } from "../icons/Trash";
 import { useNavigate } from "react-router-dom";
 
-const BACKEND_URL = "http://localhost:3000";
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 interface Room {
     _id: string;

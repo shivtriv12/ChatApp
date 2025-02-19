@@ -12,7 +12,12 @@ import { Document} from "mongoose";
 import cookieParser from "cookie-parser";
 
 const app = express();
-app.use(cors());
+app.use(
+    cors({
+      origin: "http://localhost:5173",
+      credentials: true,
+    })
+  );
 app.use(cookieParser());
 app.use(express.json());
 dotenv.config();
@@ -273,7 +278,7 @@ wss.on("connection",async (socket,req)=>{
             await newMessage.save();
 
             socketsInRoom.forEach((ws) => {
-                if ( ws !== socket && ws.readyState === WebSocket.OPEN) {
+                if ( ws.readyState === WebSocket.OPEN) {
                     ws.send(payload);
                 }
             });
