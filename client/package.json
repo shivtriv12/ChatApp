@@ -9,7 +9,7 @@
     "start": "vite preview",
     "lint": "eslint .",
     "preview": "vite preview"
-  },
+  }, 
   "dependencies": {
     "@types/dotenv": "^8.2.3",
     "@types/js-cookie": "^3.0.6",
