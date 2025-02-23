@@ -14,7 +14,7 @@ import cookieParser from "cookie-parser";
 const app = express();
 app.use(
     cors({
-      origin: "https://chat-app-frontend-sigma-liard.vercel.app/",
+      origin: "https://chat-app-frontend-sigma-liard.vercel.app",
       credentials: true,
     })
 );
