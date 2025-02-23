@@ -69,7 +69,7 @@ export function RoomPage() {
     };
 
     return (
-        <div className="h-screen w-screen bg-gradient-to-r from-gray-800 to-gray-900 flex flex-col items-center p-8">
+        <div className="min-h-screen w-screen bg-gradient-to-r from-gray-800 to-gray-900 flex flex-col items-center p-8">
             <h1 className="text-4xl font-bold text-white mb-8">Rooms</h1>
             <div className="w-full max-w-4xl bg-gray-700 rounded-lg shadow-lg p-8">
                 <h2 className="text-2xl font-bold text-white mb-4">Available Rooms</h2>
